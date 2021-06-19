@@ -1,0 +1,91 @@
+version: '3'
+
+services:
+  zm-db:
+    container_name: zm-db
+    hostname: zm-db
+    image: mariadb
+    restart: always
+    networks:
+      - zoneminder
+    volumes:
+      - zm_db:/var/lib/mysql
+    environment:
+      - MYSQL_DATABASE=zm
+    env_file:
+      - ./.env
+
+  # zoneminder:
+  #   container_name: zoneminder
+  #   hostname: zoneminder
+  #   build:
+  #     context: ./build/zoneminder-base
+  #     args:
+  #       ZM_VERSION: 1.36.4
+  #       S6_ARCH: amd64
+  #   #image: ghcr.io/zoneminder-containers/zoneminder-base:latest
+  #   restart: always
+  #   stop_grace_period: 45s
+  #   depends_on:
+  #     - zm-db
+  #   ports:
+  #     - 8081:80
+  #   networks:
+  #     - zoneminder
+  #   volumes:
+  #     - zm_data:/data
+  #     - zm_config:/config
+  #     - zm_log:/log
+  #     - type: tmpfs
+  #       target: /dev/shm
+  #       tmpfs:
+  #         size: 1000000000
+  #   env_file:
+  #     - ./.env
+#    environment:
+#      - ZM_SERVER_HOST=zoneminder1
+  zoneminder:
+    container_name: zoneminder
+    hostname: zoneminder
+    build:
+      context: ./build/
+      target: es-final-build
+      args:
+        ZM_VERSION: 1.36.4
+        ES_VERSION: v6.1.25
+    #image: ghcr.io/zoneminder-containers/eventserver-base:latest
+    restart: always
+    stop_grace_period: 45s
+    depends_on:
+      - zm-db
+    ports:
+      - 8082:80
+      - 8043:443
+      - 9010:9000
+    networks:
+      - zoneminder
+    volumes:
+      - zm_data:/data
+      - zm_config:/config
+      - zm_log:/log
+      - type: tmpfs
+        target: /dev/shm
+        tmpfs:
+          size: 1000000000
+    env_file:
+      - ./.env
+  #    environment:
+  #      - ZM_SERVER_HOST=zoneminder1
+
+
+volumes:
+  zm_db:
+  zm_data:
+  zm_config:
+  zm_log:
+  # zm_event_data:
+  # zm_event_config:
+  # zm_event_log:
+
+networks:
+  zoneminder:
