@@ -350,6 +350,7 @@ RUN set -x \
     && yes | perl -MCPAN -e "install Config::IniFiles" \
     && yes | perl -MCPAN -e "install Time::Piece" \
     && yes | perl -MCPAN -e "install Net::MQTT::Simple" \
+    && yes | perl -MCPAN -e "install Net::MQTT::Simple::Auth" \
     && apt-get remove --purge -y \
         build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -397,3 +398,90 @@ ENV \
 
 LABEL \
     com.github.alexyao2015.es_version=${ES_VERSION}
+
+# Face rekognition start build
+FROM es-final-build as es-face-build-1
+RUN apt-get install -y --fix-missing \
+    libyaml-perl \
+    libavutil-dev \
+    ffmpeg \
+    libvlc-dev \
+    libvlccore-dev \
+    vlc-bin \
+    vlc-plugin-base \
+    vlc-plugin-video-output \
+    ssmtp \
+    net-tools \
+    sudo \
+    make \
+    gcc \
+    cmake \
+    gfortran \
+    git \
+    wget \
+    curl \
+    graphicsmagick \
+    libgraphicsmagick1-dev \
+    libatlas-base-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libgtk2.0-dev \
+    libjpeg-dev \
+    liblapack-dev \
+    libswscale-dev \
+    pkg-config \
+    python3-dev \
+    python3-numpy \
+	python3-setuptools \
+    software-properties-common \
+    zip \
+    && apt-get clean && rm -rf /tmp/* /var/tmp/*
+RUN cd ~ && \
+    mkdir -p dlib && \
+    git clone -b 'v19.22' --single-branch https://github.com/davisking/dlib.git dlib/
+# RUN cd  ~/dlib/ && \
+# 	mkdir -p build; cd build; cmake .. -DDLIB_USE_CUDA=0 -DUSE_AVX_INSTRUCTIONS=1; cmake --build .
+RUN cd  ~/dlib/ && \
+	python3 setup.py install --no DLIB_USE_CUDA
+RUN	apt-get -y install python3-pip && \
+	apt-get -y install libopenblas-dev liblapack-dev libblas-dev && \
+	pip3 install future && \
+	pip3 install /root/zmeventnotification && \
+	pip3 install face_recognition && \
+	rm -r /root/zmeventnotification/zmes_hook_helpers && \
+	cd /root/ && \
+	mkdir -p models/tinyyolov3 && \
+	wget https://pjreddie.com/media/files/yolov3-tiny.weights -O models/tinyyolov3/yolov3-tiny.weights && \
+	wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3-tiny.cfg -O models/tinyyolov3/yolov3-tiny.cfg && \
+	wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names -O models/tinyyolov3/coco.names && \
+	mkdir -p models/yolov3 && \
+	wget https://raw.githubusercontent.com/pjreddie/darknet/master/cfg/yolov3.cfg -O models/yolov3/yolov3.cfg && \
+	wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names -O models/yolov3/coco.names && \
+	wget https://pjreddie.com/media/files/yolov3.weights -O models/yolov3/yolov3.weights && \
+	mkdir -p models/tinyyolov4 && \
+	wget https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v4_pre/yolov4-tiny.weights -O models/tinyyolov4/yolov4-tiny.weights && \
+	wget https://raw.githubusercontent.com/AlexeyAB/darknet/master/cfg/yolov4-tiny.cfg -O models/tinyyolov4/yolov4-tiny.cfg && \
+	wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names -O models/tinyyolov4/coco.names && \
+	mkdir -p models/yolov4 && \
+	wget https://raw.githubusercontent.com/AlexeyAB/darknet/master/cfg/yolov4.cfg -O models/yolov4/yolov4.cfg && \
+	wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names -O models/yolov4/coco.names && \
+	wget https://github.com/AlexeyAB/darknet/releases/download/darknet_yolo_v3_optimal/yolov4.weights -O models/yolov4/yolov4.weights
+
+FROM es-face-build-1 as es-face-build-2
+RUN	cd /root && \
+	wget -q -O opencv.zip https://github.com/opencv/opencv/archive/4.5.2.zip && \
+	wget -q -O opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/4.5.2.zip && \
+	unzip opencv.zip && \
+	unzip opencv_contrib.zip && \
+	mv $(ls -d opencv-*) opencv && \
+	mv opencv_contrib-4.5.2 opencv_contrib && \
+	rm *.zip && \
+	cd /root/opencv && \
+	mkdir build && \
+	cd build && \
+	cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local -D INSTALL_PYTHON_EXAMPLES=OFF -D INSTALL_C_EXAMPLES=OFF -D OPENCV_ENABLE_NONFREE=ON -D OPENCV_EXTRA_MODULES_PATH=/root/opencv_contrib/modules -D HAVE_opencv_python3=ON -D PYTHON_EXECUTABLE=/usr/bin/python3 -D PYTHON2_EXECUTABLE=/usr/bin/python2 -D BUILD_EXAMPLES=OFF .. >/dev/null && \
+	make -j4 && \
+	make install && \
+	cd /root && \
+	rm -r opencv*
+
